@@ -13,7 +13,7 @@ static bool enable_frame_limit = true;
 static auto frame_start = system_clock::now();
 static auto frame_ratio = FrameRatio(1);
 static int last_multi = 0;
-static duration<double, milli> present = {};
+static duration<double, milli> present_time = {};
 
 static void __cdecl FrameLimit_r();
 static void __cdecl SetFrameMultiplier_r(int a1);
@@ -27,7 +27,7 @@ static void __cdecl FrameLimit_r()
 {
 	auto now = system_clock::now();
 
-	if (enable_frame_limit && present <= frame_ratio)
+	if (enable_frame_limit && present_time < frame_ratio)
 	{
 		while ((now = system_clock::now()) - frame_start < frame_ratio)
 		{
@@ -36,22 +36,25 @@ static void __cdecl FrameLimit_r()
 
 	frame_start = system_clock::now();
 }
+
 static void __cdecl SetFrameMultiplier_r(int a1)
 {
-	if (a1 == last_multi)
-		return;
-
-	last_multi = a1;
-	frame_ratio = FrameRatio(a1);
+	if (a1 != last_multi)
+	{
+		*(int*)0x0389D7DC = a1;
+		last_multi = a1;
+		frame_ratio = FrameRatio(a1);
+	}
 }
+
 static void __cdecl Direct3D_Present_r()
 {
-	VoidFunc(original, Direct3D_Present_t.Target());
+	auto original = (decltype(Direct3D_Present_r)*)Direct3D_Present_t.Target();
 
 	// This is done to avoid vsync issues.
 	auto start = system_clock::now();
 	original();
-	present = system_clock::now() - start;
+	present_time = system_clock::now() - start;
 }
 
 extern "C"

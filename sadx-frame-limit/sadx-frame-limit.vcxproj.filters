@@ -13,13 +13,19 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Source Files\external">
+      <UniqueIdentifier>{5f4cbb21-42f2-4ff5-a473-f6dacbdad49f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\external">
+      <UniqueIdentifier>{387d948b-b4aa-48c1-9516-e9c71925e173}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\sadx-mod-loader\libmodutils\Trampoline.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\external</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -30,7 +36,7 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\sadx-mod-loader\libmodutils\Trampoline.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\external</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
