@@ -2,18 +2,20 @@
 
 #include <SADXModLoader.h>
 #include <chrono>
+#include <thread>
 #include "../sadx-mod-loader/libmodutils/Trampoline.h"
 
-using namespace std;
-using namespace chrono;
+using namespace std::chrono;
 
-using FrameRatio = duration<double, ratio<1, 60>>;
+using FrameRatio = duration<double, std::ratio<1, 60>>;
 
 static bool enable_frame_limit = true;
 static auto frame_start = system_clock::now();
 static auto frame_ratio = FrameRatio(1);
 static int last_multi = 0;
-static duration<double, milli> present_time = {};
+static duration<double, std::milli> present_time = {};
+
+static const auto frame_portion_ms = duration_cast<milliseconds>(frame_ratio) - milliseconds(1);
 
 static void __cdecl FrameLimit_r();
 static void __cdecl SetFrameMultiplier_r(int a1);
@@ -25,12 +27,20 @@ static Trampoline Direct3D_Present_t(0x0078BA30, 0x0078BA35, Direct3D_Present_r)
 
 static void __cdecl FrameLimit_r()
 {
-	auto now = system_clock::now();
-
 	if (enable_frame_limit && present_time < frame_ratio)
 	{
-		while ((now = system_clock::now()) - frame_start < frame_ratio)
+		auto now = system_clock::now();
+		const milliseconds delta = duration_cast<milliseconds>(now - frame_start);
+
+		if (delta < frame_ratio)
 		{
+			// sleep for a portion of the frame time to free up cpu time
+			std::this_thread::sleep_for(frame_portion_ms - delta);
+
+			while ((now = system_clock::now()) - frame_start < frame_ratio)
+			{
+				// spin for the remainder of the time
+			}
 		}
 	}
 
@@ -41,7 +51,7 @@ static void __cdecl SetFrameMultiplier_r(int a1)
 {
 	if (a1 != last_multi)
 	{
-		*(int*)0x0389D7DC = a1;
+		*reinterpret_cast<int*>(0x0389D7DC) = a1;
 		last_multi = a1;
 		frame_ratio = FrameRatio(a1);
 	}
@@ -49,10 +59,10 @@ static void __cdecl SetFrameMultiplier_r(int a1)
 
 static void __cdecl Direct3D_Present_r()
 {
-	auto original = (decltype(Direct3D_Present_r)*)Direct3D_Present_t.Target();
+	const auto original = static_cast<decltype(Direct3D_Present_r)*>(Direct3D_Present_t.Target());
 
 	// This is done to avoid vsync issues.
-	auto start = system_clock::now();
+	const auto start = system_clock::now();
 	original();
 	present_time = system_clock::now() - start;
 }
