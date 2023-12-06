@@ -1,75 +1,51 @@
 #include "stdafx.h"
 
-#include <SADXModLoader.h>
-#include <chrono>
-#include <thread>
-#include "../sadx-mod-loader/libmodutils/Trampoline.h"
+DataPointer(LARGE_INTEGER, PerformanceFrequency, 0x03D08538);
+DataPointer(LARGE_INTEGER, PerformanceCounter, 0x03D08550);
+DataPointer(int, FrameMultiplier, 0x0389D7DC);
 
-using namespace std::chrono;
-
-using FrameRatio = duration<double, std::ratio<1, 60>>;
+static constexpr int native_frames_per_second = 60;
 
 static bool enable_frame_limit = true;
-static auto frame_start = system_clock::now();
-static auto frame_ratio = FrameRatio(1);
-static int last_multi = 0;
-static duration<double, std::milli> present_time = {};
-
-static const auto frame_portion_ms = duration_cast<milliseconds>(frame_ratio) - milliseconds(1);
 
 static void __cdecl FrameLimit_r();
-static void __cdecl SetFrameMultiplier_r(int a1);
-static void __cdecl Direct3D_Present_r();
 
 static Trampoline FrameLimit_t(0x007899E0, 0x007899E8, FrameLimit_r);
-static Trampoline SetFrameMultiplier_t(0x007899A0, 0x007899A6, SetFrameMultiplier_r);
-static Trampoline Direct3D_Present_t(0x0078BA30, 0x0078BA35, Direct3D_Present_r);
 
 static void __cdecl FrameLimit_r()
 {
-	if (enable_frame_limit && present_time < frame_ratio)
+	if (enable_frame_limit && QueryPerformanceFrequency(&PerformanceFrequency))
 	{
-		auto now = system_clock::now();
-		const milliseconds delta = duration_cast<milliseconds>(now - frame_start);
+		const auto frequency = FrameMultiplier * PerformanceFrequency.QuadPart / native_frames_per_second;
+		LARGE_INTEGER counter;
 
-		if (delta < frame_ratio)
+		do
 		{
-			// sleep for a portion of the frame time to free up cpu time
-			std::this_thread::sleep_for(frame_portion_ms - delta);
+			QueryPerformanceCounter(&counter);
+		} while (counter.QuadPart - PerformanceCounter.QuadPart < frequency);
 
-			while ((now = system_clock::now()) - frame_start < frame_ratio)
-			{
-				// spin for the remainder of the time
-			}
-		}
+		PerformanceCounter = counter;
 	}
-
-	frame_start = system_clock::now();
-}
-
-static void __cdecl SetFrameMultiplier_r(int a1)
-{
-	if (a1 != last_multi)
+	else
 	{
-		*reinterpret_cast<int*>(0x0389D7DC) = a1;
-		last_multi = a1;
-		frame_ratio = FrameRatio(a1);
+		QueryPerformanceCounter(&PerformanceCounter);
 	}
-}
-
-static void __cdecl Direct3D_Present_r()
-{
-	const auto original = static_cast<decltype(Direct3D_Present_r)*>(Direct3D_Present_t.Target());
-
-	// This is done to avoid vsync issues.
-	const auto start = system_clock::now();
-	original();
-	present_time = system_clock::now() - start;
 }
 
 extern "C"
 {
 	__declspec(dllexport) ModInfo SADXModInfo = { ModLoaderVer };
+
+	__declspec(dllexport) void __cdecl Init(const char* path, const HelperFunctions& helperFunctions)
+	{
+		QueryPerformanceCounter(&PerformanceCounter);
+
+		// This patch changes 60.5 to 60, ensuring that the frame skip count at 0x3B11180
+		// is updated properly.
+		// FIXME: Unlike the default behavior, this can accumulate error and cause the some
+		// straddling of the target-frame time which can in the end induce a constant stutter.
+		WriteData<float>(reinterpret_cast<float*>(0x007DCE58), static_cast<float>(native_frames_per_second));
+	}
 
 #ifdef _DEBUG
 	__declspec(dllexport) void __cdecl OnInput()
